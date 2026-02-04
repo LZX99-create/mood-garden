@@ -746,6 +746,28 @@
         // · 匿名使用：无登录、注册、账号，数据仅存浏览器本地（localStorage）
         // · 刷新/关闭后再次打开仍存在；点开 index.html 即可使用，可分享给他人使用（各自本地数据）
 
+        // ==================== 匿名访问与行为统计（可选，无 cookie、不追踪个人身份）====================
+        // 使用 GoatCounter：https://www.goatcounter.com/ ，仅统计页面访问量与按钮点击次数，不收集情绪数据、无账号
+        // 填写你的 GoatCounter 站点地址后生效；留空则不做任何统计、不加载任何第三方脚本
+        const GOATCOUNTER_URL = 'https://lzx99-create.goatcounter.com/count'; // 例如: 'https://你的站点.goatcounter.com/count'
+
+        function trackEvent(path) {
+            if (!GOATCOUNTER_URL || typeof path !== 'string') return;
+            try {
+                if (window.goatcounter && window.goatcounter.count) {
+                    window.goatcounter.count({ path: path, event: true });
+                }
+            } catch (e) {}
+        }
+        (function () {
+            if (!GOATCOUNTER_URL) return;
+            var s = document.createElement('script');
+            s.dataset.goatcounter = GOATCOUNTER_URL;
+            s.src = 'https://gc.zgo.at/count.js';
+            s.async = true;
+            document.head.appendChild(s);
+        })();
+
         // ==================== 数据管理 ====================
         // 内存中的数据存储：以日期（YYYY-MM-DD）为 key，值为当日心情记录数组
         let moodData = {};
