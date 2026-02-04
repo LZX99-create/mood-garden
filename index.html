@@ -742,7 +742,7 @@
 
     <script>
         // ==================== 项目说明（静态单页，适合 GitHub Pages）====================
-        // · 纯 HTML/CSS/JS，无服务器、无后端、无外部脚本或 API 依赖
+        // · 纯 HTML/CSS/JS，无服务器、无后端（统计为可选第三方，见下方）
         // · 匿名使用：无登录、注册、账号，数据仅存浏览器本地（localStorage）
         // · 刷新/关闭后再次打开仍存在；点开 index.html 即可使用，可分享给他人使用（各自本地数据）
 
@@ -1490,6 +1490,7 @@
             document.querySelectorAll('.view-toggle button').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const view = btn.getAttribute('data-view');
+                    trackEvent('click/view_' + (view === 'today' ? 'today' : 'n' + view));
                     currentView = view;
                     
                     document.querySelectorAll('.view-toggle button').forEach(b => {
@@ -1539,9 +1540,10 @@
                 memoInput.addEventListener('input', updateMemoCount);
                 memoInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMemoModal(); });
             }
-            if (memoCancel) memoCancel.addEventListener('click', closeMemoModal);
+            if (memoCancel) memoCancel.addEventListener('click', () => { trackEvent('click/memo_cancel'); closeMemoModal(); });
             if (memoSubmit) memoSubmit.addEventListener('click', () => {
                 if (pendingMood == null) return;
+                trackEvent('click/memo_submit');
                 const text = memoInput ? memoInput.value.trim() : '';
                 recordMood(pendingMood, text);
                 closeMemoModal();
@@ -1551,6 +1553,7 @@
             // 情绪按钮：1分钟内同心情则直接撤销不弹窗；否则弹出备忘录，提交后才在土地上展示
             document.querySelectorAll('.mood-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    trackEvent('click/mood_' + (btn.getAttribute('data-mood') || ''));
                     if (currentView !== 'today') return;
                     const mood = btn.getAttribute('data-mood');
                     if (tryUndoLastMood(mood)) return;
@@ -1589,7 +1592,7 @@
             document.querySelectorAll('.breath-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const sec = parseInt(btn.getAttribute('data-sec'), 10);
-                    if (sec) startBreathCountdown(sec);
+                    if (sec) { trackEvent('click/breath_' + sec); startBreathCountdown(sec); }
                 });
             });
 
@@ -1598,6 +1601,7 @@
             const viewSlidersToggleBtn = document.getElementById('viewSlidersToggle');
             if (viewSlidersEl && viewSlidersToggleBtn) {
                 viewSlidersToggleBtn.addEventListener('click', () => {
+                    trackEvent('click/panel_toggle');
                     viewSlidersEl.classList.toggle('collapsed');
                     viewSlidersToggleBtn.textContent = viewSlidersEl.classList.contains('collapsed') ? '»' : '«';
                     viewSlidersToggleBtn.title = viewSlidersEl.classList.contains('collapsed') ? '展开' : '收起';
