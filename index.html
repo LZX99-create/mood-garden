@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 移动端优先：视口与缩放，支持手机浏览器正常使用 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#F5F5F5">
+    <meta name="description" content="情绪花园：匿名记录心情，数据仅存本地，点开即用，无需登录。">
+    <!-- 静态单页：纯 HTML/CSS/JS，无服务器、无后端、无外部依赖，适合 GitHub Pages 部署 -->
+    <!-- 匿名使用、点开即用：无登录/注册/账号，数据仅存浏览器本地（localStorage），可分享给他人使用 -->
+    <title>情绪花园</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* 安全区域：适配刘海屏等，固定元素避开缺口 */
+        :root {
+            --safe-top: env(safe-area-inset-top, 0);
+            --safe-bottom: env(safe-area-inset-bottom, 0);
+            --safe-left: env(safe-area-inset-left, 0);
+            --safe-right: env(safe-area-inset-right, 0);
+            /* 手指可点区域建议不小于 44px */
+            --touch-min: 44px;
+        }
+
+        body {
+            background-color: #F5F5F5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+            min-height: 100dvh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 第一栏：日期｜共x条记录 — 触边、不换行、字号自适应 */
+        .debug-info {
+            position: fixed;
+            top: max(10px, var(--safe-top));
+            left: 0;
+            right: 0;
+            padding: 8px max(12px, var(--safe-right)) 8px max(12px, var(--safe-left));
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 0;
+            font-size: clamp(8px, 2.2vw, 13px);
+            white-space: nowrap;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 日期栏 + 心情按钮栏：贴左右边、内容居中，不换行、字号自适应 */
+        .controls {
+            position: fixed;
+            top: max(48px, calc(44px + var(--safe-top)));
+            left: 0;
+            right: 0;
+            padding-left: var(--safe-left);
+            padding-right: var(--safe-right);
+            padding-bottom: 8px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                align-items: center;
+            }
+        }
+
+        .view-toggle {
+            display: flex;
+            justify-content: center;
+            background: white;
+            border-radius: 0;
+            padding: 4px var(--safe-right) 4px var(--safe-left);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            flex-wrap: nowrap;
+            gap: 4px;
+        }
+
+        .view-toggle button {
+            padding: 10px 14px;
+            min-height: var(--touch-min);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: clamp(11px, 2.5vw, 14px);
+            transition: all 0.2s;
+            white-space: nowrap;
+            touch-action: manipulation;
+        }
+
+        .view-toggle button.active {
+            background: #4A90E2;
+            color: white;
+        }
+
+        .mood-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+            padding: 0 var(--safe-right) 0 var(--safe-left);
+        }
+
+        /* 情绪按钮：移动端适合手指点击，最小触控区域；心情名与占比上下排列，字号自适应 */
+        .mood-btn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 10px;
+            min-height: var(--touch-min);
+            min-width: 36px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: clamp(12px, 2.6vw, 15px);
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            touch-action: manipulation;
+            line-height: 1.25;
+        }
+        .mood-btn .mood-btn-label {
+            display: block;
+            white-space: nowrap;
+        }
+        .mood-btn .mood-btn-percent {
+            display: block;
+            font-size: 0.75em;
+            opacity: 0.9;
+            white-space: nowrap;
+        }
+        .mood-btn .mood-btn-percent:empty {
+            display: none;
+        }
+
+        .mood-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .mood-btn.happy {
+            background: linear-gradient(135deg, #FFD93D, #FFB347);
+            color: #333;
+        }
+
+        .mood-btn.calm {
+            background: linear-gradient(135deg, #A8E6CF, #7FCDBB);
+            color: #333;
+        }
+
+        .mood-btn.sad {
+            background: linear-gradient(135deg, #B19CD9, #8B7FA8);
+            color: white;
+        }
+
+        .mood-btn.anxious {
+            background: linear-gradient(135deg, #FFA07A, #FF7F50);
+            color: #333;
+        }
+
+        .mood-btn.love {
+            background: linear-gradient(135deg, #E63946, #FF6B6B);
+            color: white;
+        }
+
+        .mood-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .mood-btn:disabled:hover {
+            transform: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 花园画布：自适应屏幕尺寸，移动端占满可视区域 */
+        .garden-container {
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 100vh;
+            min-height: 100dvh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .garden-svg {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .plant {
+            opacity: 0;
+            transform: scale(0.6);
+            animation: plantGrow 700ms ease-out forwards;
+        }
+
+        @keyframes plantGrow {
+            to {
+                opacity: 0.9;
+                transform: scale(1);
+            }
+        }
+
+        .plant path {
+            filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
+        }
+
+        /* 【今天】视图：植物摇曳动画，像风吹过 */
+        .plant-sway {
+            animation: plantSway 4s ease-in-out infinite;
+        }
+
+        .plant-sway-slow {
+            animation-duration: 5s;
+            animation-delay: 0.5s;
+        }
+
+        .plant-sway-slower {
+            animation-duration: 6s;
+            animation-delay: 1s;
+        }
+
+        @keyframes plantSway {
+            0%, 100% { transform: rotate(-5deg); }
+            25% { transform: rotate(2deg); }
+            50% { transform: rotate(6deg); }
+            75% { transform: rotate(-2deg); }
+        }
+
+        /* 查看模式 + 深呼吸调节：左方可调 bar，略增高度，增加透明度以透出底下花园 */
+        .view-sliders {
+            position: fixed;
+            left: max(10px, var(--safe-left));
+            top: max(48px, calc(10px + var(--safe-top)));
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.62);
+            padding: 14px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+            min-width: min(200px, 85vw);
+        }
+
+        .view-sliders h3 {
+            font-size: 12px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .slider-row {
+            margin-bottom: 12px;
+        }
+
+        .slider-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-row label {
+            display: block;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .slider-row .range-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .slider-row .range-min {
+            font-size: 10px;
+            color: #999;
+            width: 20px;
+            text-align: left;
+        }
+
+        .slider-row input[type="range"] {
+            flex: 1;
+            min-width: 0;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #e0e0e0;
+            border-radius: 3px;
+        }
+
+        /* 滑块拇指：适度缩小，与滑动条长度和谐匹配 */
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #4A90E2;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .slider-row .range-max {
+            font-size: 10px;
+            color: #999;
+            width: 20px;
+            text-align: right;
+        }
+
+        /* 手机模式：调节区块宽度减半、下移到左侧中间高度，不遮挡时间与心情按钮 */
+        @media (max-width: 768px) {
+            .view-sliders {
+                top: 50%;
+                transform: translateY(-50%);
+                min-width: min(100px, 42vw);
+                width: min(100px, 42vw);
+                max-width: 42vw;
+                padding: 10px 8px;
+            }
+            .view-sliders h3 {
+                font-size: 11px;
+                margin-bottom: 8px;
+            }
+            .slider-row {
+                margin-bottom: 12px;
+            }
+            .slider-row label {
+                font-size: 10px;
+                margin-bottom: 2px;
+            }
+            .slider-row .range-wrap {
+                gap: 4px;
+            }
+            .slider-row .range-min,
+            .slider-row .range-max {
+                width: 14px;
+                font-size: 9px;
+            }
+            .slider-row input[type="range"] {
+                min-width: 0;
+            }
+            .breath-section {
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            .breath-section h3 {
+                font-size: 11px;
+                margin-bottom: 6px;
+            }
+            .breath-clock {
+                width: 48px;
+                height: 48px;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            .breath-clock.idle {
+                font-size: 12px;
+            }
+            .breath-btns {
+                gap: 6px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .breath-btn {
+                padding: 8px 12px;
+                min-width: 48px;
+                font-size: 12px;
+            }
+        }
+
+        .plant-sway {
+            animation-duration: var(--sway-duration, 4s);
+        }
+
+        .plant-sway-slow {
+            animation-duration: var(--sway-duration-slow, 5s);
+        }
+
+        .plant-sway-slower {
+            animation-duration: var(--sway-duration-slower, 6s);
+        }
+
+        /* 深呼吸调节：闹钟倒计时 + 结束震动，板块略增高 */
+        .breath-section {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .breath-section h3 {
+            font-size: 12px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .breath-clock {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 10px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #f0f0f0, #fff);
+            border: 3px solid #4A90E2;
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.8), 0 2px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            user-select: none;
+        }
+
+        .breath-clock.idle {
+            color: #999;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .breath-clock.shake {
+            animation: breathShake 0.5s ease-in-out;
+        }
+
+        @keyframes breathShake {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-4px, -2px); }
+            20% { transform: translate(4px, 2px); }
+            30% { transform: translate(-4px, 2px); }
+            40% { transform: translate(4px, -2px); }
+            50% { transform: translate(-3px, 0); }
+            60% { transform: translate(3px, 0); }
+            70% { transform: translate(-2px, 0); }
+            80% { transform: translate(2px, 0); }
+            90% { transform: translate(-1px, 0); }
+        }
+
+        .breath-btns {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .breath-btn {
+            padding: 10px 16px;
+            min-height: var(--touch-min);
+            min-width: 60px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #6BB5FF, #4A90E2);
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(74, 144, 226, 0.35);
+            transition: transform 0.2s, box-shadow 0.2s;
+            touch-action: manipulation;
+        }
+
+        .breath-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(74, 144, 226, 0.4);
+        }
+
+        .breath-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 隐私宣言：页面底部常驻、左右触边、内容居中，不强制换行 */
+        .privacy-declaration {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 998;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px max(16px, var(--safe-right)) 14px max(16px, var(--safe-left));
+            padding-bottom: max(14px, var(--safe-bottom));
+            background: rgba(248, 250, 246, 0.88);
+            border-radius: 0;
+            border: none;
+            border-top: 1px solid rgba(138, 160, 130, 0.2);
+            box-shadow: 0 -2px 12px rgba(90, 110, 85, 0.08);
+            font-size: clamp(12px, 2.8vw, 13px);
+            line-height: 1.6;
+            color: #4a5d4a;
+            text-align: center;
+            letter-spacing: 0.02em;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .privacy-declaration .privacy-line {
+            display: block;
+        }
+
+        .privacy-declaration .privacy-line:first-child {
+            font-weight: 600;
+            color: #3d503d;
+            margin-bottom: 0.35em;
+        }
+
+        /* 心情备忘录弹窗：选择心情后弹出，可输入0–66字，提交后心情才展示 */
+        .memo-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: max(16px, var(--safe-left));
+        }
+        .memo-overlay.show {
+            display: flex;
+        }
+        .memo-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px;
+            max-width: 360px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+        .memo-card h3 {
+            font-size: 15px;
+            color: #333;
+            margin-bottom: 12px;
+        }
+        .memo-card .memo-mood-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        .memo-card textarea {
+            width: 100%;
+            min-height: 88px;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .memo-card textarea:focus {
+            outline: none;
+            border-color: #4A90E2;
+        }
+        .memo-card .memo-count {
+            text-align: right;
+            font-size: 12px;
+            color: #999;
+            margin-top: 6px;
+        }
+        .memo-card .memo-count.at-limit {
+            color: #c66;
+        }
+        .memo-card .memo-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .memo-card .memo-actions button {
+            flex: 1;
+            min-height: var(--touch-min);
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .memo-card .memo-cancel {
+            background: #f0f0f0;
+            color: #666;
+        }
+        .memo-card .memo-submit {
+            background: #4A90E2;
+            color: #fff;
+        }
+        .memo-card .memo-submit:hover {
+            background: #3a7bc8;
+        }
+
+        /* 左侧调节面板：可收起/展开 */
+        .view-sliders {
+            transition: width 0.25s ease, min-width 0.25s ease, padding 0.25s ease;
+            overflow: hidden;
+        }
+        .view-sliders.collapsed {
+            min-width: 44px;
+            width: 44px;
+            padding: 10px 8px;
+        }
+        .view-sliders.collapsed .view-sliders-content {
+            display: none;
+        }
+        .view-sliders-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            min-height: var(--touch-min);
+            min-width: var(--touch-min);
+            border: none;
+            background: rgba(74, 144, 226, 0.2);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #4A90E2;
+            margin-bottom: 8px;
+            touch-action: manipulation;
+        }
+        .view-sliders.collapsed .view-sliders-toggle {
+            margin-bottom: 0;
+        }
+        .view-sliders-toggle:hover {
+            background: rgba(74, 144, 226, 0.35);
+        }
+
+        /* 心情日记浮动提示：仅在今天/最近n天视图下，悬停心情时显示 memo */
+        .memo-tooltip {
+            position: fixed;
+            z-index: 1500;
+            max-width: 280px;
+            padding: 10px 14px;
+            background: rgba(40, 40, 40, 0.92);
+            color: #f0f0f0;
+            font-size: 13px;
+            line-height: 1.5;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+            pointer-events: none;
+            display: none;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .memo-tooltip.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-info" id="debugInfo">今天 | 2026-01-27</div>
+
+    <div class="memo-tooltip" id="memoTooltip" aria-hidden="true"></div>
+
+    <!-- 心情备忘录弹窗 -->
+    <div class="memo-overlay" id="memoOverlay">
+        <div class="memo-card">
+            <h3>记录此刻心情</h3>
+            <span class="memo-mood-tag" id="memoMoodTag"></span>
+            <textarea id="memoInput" placeholder="选填：写下此刻想说的话（最多66字）" maxlength="66"></textarea>
+            <div class="memo-count" id="memoCount">0/66</div>
+            <div class="memo-actions">
+                <button type="button" class="memo-cancel" id="memoCancel">取消</button>
+                <button type="button" class="memo-submit" id="memoSubmit">提交</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隐私宣言：传达匿名与隐私保护，常驻页面底部，不遮挡其他元素 -->
+    <div class="privacy-declaration" id="privacyDeclaration" role="contentinfo">
+        <span class="privacy-line">这是一座匿名情绪花园。</span>
+        <span class="privacy-line">不需要账号，也没有人统计你的情绪，</span>
+        <span class="privacy-line">这里只有时间，和你种下的属于你的东西。</span>
+    </div>
+
+    <div class="view-sliders" id="viewSliders">
+        <button type="button" class="view-sliders-toggle" id="viewSlidersToggle" title="收起/展开">«</button>
+        <div class="view-sliders-content">
+        <h3>查看调节</h3>
+        <div class="slider-row">
+            <label>图标大小</label>
+            <div class="range-wrap">
+                <span class="range-min">0.3</span>
+                <input type="range" id="sizeBar" min="0.3" max="2" step="0.01" value="1">
+                <span class="range-max">2</span>
+            </div>
+        </div>
+        <div class="slider-row">
+            <label>图标间隔</label>
+            <div class="range-wrap">
+                <span class="range-min">0.3</span>
+                <input type="range" id="spacingBar" min="0.3" max="2" step="0.01" value="1">
+                <span class="range-max">2</span>
+            </div>
+        </div>
+        <div class="slider-row">
+            <label>风吹摆动</label>
+            <div class="range-wrap">
+                <span class="range-min">0.3</span>
+                <input type="range" id="swayBar" min="0.3" max="2" step="0.01" value="1">
+                <span class="range-max">2</span>
+            </div>
+        </div>
+        <div class="breath-section">
+            <h3>深呼吸调节</h3>
+            <div class="breath-clock idle" id="breathClock">—</div>
+            <div class="breath-btns">
+                <button type="button" class="breath-btn" id="breath30" data-sec="30">30秒</button>
+                <button type="button" class="breath-btn" id="breath60" data-sec="60">60秒</button>
+            </div>
+        </div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <div class="view-toggle">
+            <button id="todayBtn" class="active" data-view="today">今天</button>
+            <button id="week7Btn" data-view="7">最近7天</button>
+            <button id="week30Btn" data-view="30">最近30天</button>
+            <button id="week60Btn" data-view="60">最近60天</button>
+        </div>
+        <div class="mood-buttons">
+            <button class="mood-btn happy" data-mood="happy"><span class="mood-btn-label">开心</span><span class="mood-btn-percent"></span></button>
+            <button class="mood-btn calm" data-mood="calm"><span class="mood-btn-label">平静</span><span class="mood-btn-percent"></span></button>
+            <button class="mood-btn sad" data-mood="sad"><span class="mood-btn-label">难过</span><span class="mood-btn-percent"></span></button>
+            <button class="mood-btn anxious" data-mood="anxious"><span class="mood-btn-label">焦虑</span><span class="mood-btn-percent"></span></button>
+            <button class="mood-btn love" data-mood="love"><span class="mood-btn-label">爱</span><span class="mood-btn-percent"></span></button>
+        </div>
+    </div>
+
+    <!-- 花园画布：自适应屏幕，viewBox 固定逻辑坐标，preserveAspectRatio 适配不同尺寸 -->
+    <div class="garden-container" id="gardenContainer">
+        <svg class="garden-svg" id="gardenSvg" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <script>
+        // ==================== 项目说明（静态单页，适合 GitHub Pages）====================
+        // · 纯 HTML/CSS/JS，无服务器、无后端、无外部脚本或 API 依赖
+        // · 匿名使用：无登录、注册、账号，数据仅存浏览器本地（localStorage）
+        // · 刷新/关闭后再次打开仍存在；点开 index.html 即可使用，可分享给他人使用（各自本地数据）
+
+        // ==================== 数据管理 ====================
+        // 内存中的数据存储：以日期（YYYY-MM-DD）为 key，值为当日心情记录数组
+        let moodData = {};
+        let currentView = 'today';
+        const today = new Date();
+        // 查看模式下滑块：图标大小倍数(0.3~2)、图标间隔倍数(0.3~2)、风吹摆动速度倍数(0.3~2)
+        let sizeScale = 1;
+        let spacingScale = 1;
+        let swayScale = 1;
+        const STORAGE_KEY = 'moodGardenData'; // localStorage 键，仅存本地
+        const MAX_DAYS = 90; // 仅保留最近 90 天的数据
+
+        // 获取日期字符串（YYYY-MM-DD）
+        function getDateString(date = today) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // 计算两个日期之间的天数差
+        function getDaysDiff(date1, date2) {
+            const oneDay = 24 * 60 * 60 * 1000;
+            return Math.round(Math.abs((date1 - date2) / oneDay));
+        }
+
+        // 从 localStorage 加载历史数据（页面刷新、关闭后再次打开时恢复）
+        function loadDataFromStorage() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    moodData = JSON.parse(stored);
+                    
+                    // 为没有 timestamp 的历史记录添加唯一 timestamp（兼容旧数据，避免重复 data-record-id）
+                    for (const dateStr in moodData) {
+                        const dateObj = new Date(dateStr);
+                        const baseTs = dateObj.getTime() - 2 * 60 * 1000;
+                        moodData[dateStr].forEach((record, idx) => {
+                            if (!record.timestamp) {
+                                record.timestamp = baseTs + idx; // 每条记录唯一，避免周期视图重复 ID
+                            }
+                        });
+                    }
+                    
+                    // 清理超过 90 天的旧数据
+                    cleanOldData();
+                    // 保存清理后的数据
+                    saveDataToStorage();
+                }
+            } catch (e) {
+                console.error('加载数据失败:', e);
+                moodData = {};
+            }
+        }
+
+        // 保存数据到 localStorage（仅存浏览器本地，无服务器）
+        function saveDataToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(moodData));
+            } catch (e) {
+                console.error('保存数据失败:', e);
+            }
+        }
+
+        // 清理超过 90 天的旧数据
+        function cleanOldData() {
+            const todayStr = getDateString();
+            const todayDate = new Date(todayStr);
+            const keysToDelete = [];
+
+            // 遍历所有日期 key，找出超过 90 天的
+            for (const dateStr in moodData) {
+                const dateObj = new Date(dateStr);
+                if (getDaysDiff(todayDate, dateObj) > MAX_DAYS) {
+                    keysToDelete.push(dateStr);
+                }
+            }
+
+            // 删除旧数据
+            keysToDelete.forEach(key => {
+                delete moodData[key];
+            });
+        }
+
+        // 初始化日期数据（如果不存在则创建空数组）
+        function initDateData(dateStr) {
+            if (!moodData[dateStr]) {
+                moodData[dateStr] = [];
+            }
+        }
+
+        // ==================== 视图范围计算 ====================
+        // 根据视图模式获取需要展示的日期范围
+        function getDateRange(viewMode) {
+            const dates = [];
+            const todayDate = new Date();
+            
+            if (viewMode === 'today') {
+                // 今天
+                dates.push(new Date(todayDate));
+            } else {
+                // 最近 N 天（包括今天）
+                const days = parseInt(viewMode);
+                for (let i = days - 1; i >= 0; i--) {
+                    const date = new Date(todayDate);
+                    date.setDate(todayDate.getDate() - i);
+                    dates.push(date);
+                }
+            }
+            
+            return dates;
+        }
+
+        // 获取指定日期范围内的所有心情记录
+        function getMoodRecordsInRange(dateRange) {
+            const records = [];
+            dateRange.forEach(date => {
+                const dateStr = getDateString(date);
+                if (moodData[dateStr] && moodData[dateStr].length > 0) {
+                    // 为每条记录添加日期信息，用于时间分布计算
+                    moodData[dateStr].forEach(record => {
+                        records.push({
+                            ...record,
+                            date: dateStr,
+                            dateIndex: dateRange.indexOf(date) // 在范围内的索引位置
+                        });
+                    });
+                }
+            });
+            return records;
+        }
+
+        // ==================== 植物生成 ====================
+        // 生成植物路径（SVG path）
+        function generatePlantPath(mood, x, y) {
+            const baseX = x;
+            const baseY = y;
+            let path = '';
+
+            switch(mood) {
+                case 'happy': // 花 - 向上、生长感、较亮
+                    const flowerSize = 15 + Math.random() * 10;
+                    const petalCount = 5 + Math.floor(Math.random() * 3);
+                    const centerX = baseX;
+                    const centerY = baseY - flowerSize * 0.3;
+                    
+                    // 花瓣
+                    for (let i = 0; i < petalCount; i++) {
+                        const angle = (i * 360 / petalCount) * Math.PI / 180;
+                        const offsetX = Math.cos(angle) * flowerSize * 0.6;
+                        const offsetY = Math.sin(angle) * flowerSize * 0.6;
+                        const petalX = centerX + offsetX;
+                        const petalY = centerY + offsetY;
+                        const petalW = flowerSize * (0.4 + Math.random() * 0.2);
+                        const petalH = flowerSize * (0.5 + Math.random() * 0.2);
+                        
+                        path += `M ${centerX},${centerY} Q ${petalX - petalW * 0.3},${petalY - petalH * 0.2} ${petalX},${petalY} Q ${petalX + petalW * 0.3},${petalY - petalH * 0.2} ${centerX},${centerY} `;
+                    }
+                    
+                    // 花心
+                    path += `M ${centerX},${centerY} A ${flowerSize * 0.15},${flowerSize * 0.15} 0 1,1 ${centerX + 0.1},${centerY} A ${flowerSize * 0.15},${flowerSize * 0.15} 0 1,1 ${centerX},${centerY} `;
+                    
+                    // 茎
+                    const stemY = baseY;
+                    const stemCurve = (Math.random() - 0.5) * 8;
+                    path += `M ${centerX},${centerY + flowerSize * 0.2} Q ${centerX + stemCurve},${(centerY + stemY) / 2} ${centerX + stemCurve * 0.3},${stemY} `;
+                    break;
+
+                case 'calm': // 叶/草 - 横向、重复、稳定
+                    const leafCount = 3 + Math.floor(Math.random() * 3);
+                    const leafBaseY = baseY;
+                    
+                    for (let i = 0; i < leafCount; i++) {
+                        const leafX = baseX + (i - leafCount / 2) * 20;
+                        const leafY = leafBaseY + (Math.random() - 0.5) * 10;
+                        const leafW = 25 + Math.random() * 15;
+                        const leafH = 8 + Math.random() * 6;
+                        const leafAngle = (Math.random() - 0.5) * 30;
+                        
+                        const rad = leafAngle * Math.PI / 180;
+                        const cos = Math.cos(rad);
+                        const sin = Math.sin(rad);
+                        
+                        const x1 = leafX - leafW * 0.5 * cos;
+                        const y1 = leafY - leafW * 0.5 * sin;
+                        const x2 = leafX + leafW * 0.5 * cos;
+                        const y2 = leafY + leafW * 0.5 * sin;
+                        const midX = leafX;
+                        const midY = leafY - leafH;
+                        
+                        path += `M ${x1},${y1} Q ${midX},${midY} ${x2},${y2} Q ${midX},${midY + leafH * 0.5} ${x1},${y1} `;
+                    }
+                    break;
+
+                case 'sad': // 垂坠型/低头的花 - 花瓣略向下，茎弯而不断，边缘柔软
+                    const droopSize = 12 + Math.random() * 8;
+                    const droopCx = baseX + (Math.random() - 0.5) * 6;
+                    const droopCy = baseY - 20 - Math.random() * 10;
+                    const petalCountSad = 4 + Math.floor(Math.random() * 2);
+                    const stemCurveX = baseX + (Math.random() - 0.5) * 14;
+                    const stemCurveY = (baseY + droopCy) * 0.45 + (Math.random() - 0.5) * 4;
+                    path += `M ${baseX},${baseY} Q ${stemCurveX},${stemCurveY} ${droopCx},${droopCy} `;
+                    for (let i = 0; i < petalCountSad; i++) {
+                        const a = (20 + (i / Math.max(1, petalCountSad - 1)) * 70) * Math.PI / 180;
+                        const tipX = droopCx + Math.sin(a) * droopSize * 0.85;
+                        const tipY = droopCy + Math.cos(a) * droopSize * 1.15;
+                        const c1x = droopCx + Math.sin(a) * droopSize * 0.4 + (Math.random() - 0.5) * 4;
+                        const c1y = droopCy + Math.cos(a) * droopSize * 0.5;
+                        const c2x = tipX + (Math.random() - 0.5) * 3;
+                        const c2y = tipY - droopSize * 0.2;
+                        path += `M ${droopCx},${droopCy} Q ${c1x},${c1y} ${tipX},${tipY} Q ${c2x},${c2y} ${droopCx},${droopCy} `;
+                    }
+                    path += `M ${droopCx},${droopCy} A ${droopSize * 0.2},${droopSize * 0.2} 0 1,1 ${droopCx + 0.1},${droopCy} A ${droopSize * 0.2},${droopSize * 0.2} 0 1,1 ${droopCx},${droopCy} `;
+                    break;
+
+                case 'anxious': // 细长分叉草叶，一束多向如风吹乱
+                    const bladeCount = 5 + Math.floor(Math.random() * 4);
+                    const bladeBaseX = baseX;
+                    const bladeBaseY = baseY;
+                    for (let i = 0; i < bladeCount; i++) {
+                        const angle = (Math.random() - 0.5) * 160;
+                        const length = 18 + Math.random() * 14;
+                        const rad = angle * Math.PI / 180;
+                        const endX = bladeBaseX + Math.sin(rad) * length;
+                        const endY = bladeBaseY - Math.cos(rad) * length;
+                        const midX = bladeBaseX + (endX - bladeBaseX) * 0.4 + (Math.random() - 0.5) * 6;
+                        const midY = bladeBaseY + (endY - bladeBaseY) * 0.4 + (Math.random() - 0.5) * 4;
+                        path += `M ${bladeBaseX},${bladeBaseY} Q ${midX},${midY} ${endX},${endY} `;
+                        if (Math.random() > 0.45) {
+                            const forkT = 0.35 + Math.random() * 0.4;
+                            const forkX = bladeBaseX + (endX - bladeBaseX) * forkT + (Math.random() - 0.5) * 4;
+                            const forkY = bladeBaseY + (endY - bladeBaseY) * forkT + (Math.random() - 0.5) * 3;
+                            const forkAngle = angle + (Math.random() - 0.5) * 50;
+                            const forkLen = 6 + Math.random() * 8;
+                            const forkRad = forkAngle * Math.PI / 180;
+                            const forkEndX = forkX + Math.sin(forkRad) * forkLen;
+                            const forkEndY = forkY - Math.cos(forkRad) * forkLen;
+                            path += `M ${forkX},${forkY} Q ${forkX + (forkEndX - forkX) * 0.5},${forkY + (forkEndY - forkY) * 0.5} ${forkEndX},${forkEndY} `;
+                        }
+                    }
+                    break;
+
+                case 'love': // 爱心 - 流动的红色爱心形状
+                    const heartSize = 12 + Math.random() * 6;
+                    const cx = baseX;
+                    const cy = baseY - heartSize * 0.15;
+                    const s = heartSize * 0.5;
+                    const j = (Math.random() - 0.5) * 1.5;
+                    // 经典爱心贝塞尔路径，中心 (cx,cy)，略作随机使每个爱心稍有不同
+                    path += `M ${cx},${cy - s * 0.9 + j} C ${cx - s * 1.2},${cy - s * 0.9} ${cx - s * 2},${cy} ${cx - s * 2},${cy + s * 0.6} C ${cx - s * 2},${cy + s * 1.4} ${cx},${cy + s * 2.2} ${cx},${cy + s * 2.2} C ${cx},${cy + s * 2.2} ${cx + s * 2},${cy + s * 1.4} ${cx + s * 2},${cy + s * 0.6} C ${cx + s * 2},${cy} ${cx + s * 1.2},${cy - s * 0.9} ${cx},${cy - s * 0.9 + j} Z`;
+                    break;
+            }
+
+            return path;
+        }
+
+        // 获取植物颜色
+        function getPlantColor(mood) {
+            const colors = {
+                happy: ['#FFD93D', '#FFB347', '#FFE66D'],
+                calm: ['#A8E6CF', '#7FCDBB', '#88D8A3'],
+                sad: ['#9CAF88', '#A8B89A', '#B5C4A8', '#8B9A9E', '#B8C4B0', '#C5D0BD'],
+                anxious: ['#C5D89A', '#D4E4A8', '#B8AD98', '#C4B896', '#D2C9B0'],
+                love: ['#E63946', '#FF6B6B', '#FF4757']
+            };
+            const palette = colors[mood];
+            return palette[Math.floor(Math.random() * palette.length)];
+        }
+
+        // 添加植物到 SVG
+        // viewMode: 'today' 时 5 倍 + 摇曳；'7'|'30'|'60' 时可用 periodScale 自适应；scaleMultiplier 为滑块倍数(0.3~2)；memo 用于悬停时浮动显示
+        function addPlantToSvg(svg, mood, x, y, skipAnimation = false, recordId = null, viewMode = '', scaleMultiplier = 1, memo = '', periodScale = null) {
+            const path = generatePlantPath(mood, x, y);
+            const color = getPlantColor(mood);
+            
+            const isTodayView = viewMode === 'today';
+            const periodDays = viewMode === '7' ? 7 : viewMode === '30' ? 30 : viewMode === '60' ? 60 : 0;
+            let scale = isTodayView ? 5 : (periodDays && periodScale != null) ? periodScale : periodDays ? (5 * 2) / periodDays : 1;
+            scale = scale * scaleMultiplier; // 滑块：图标大小 = 原尺寸 × N
+            const useSway = isTodayView || periodDays > 0;
+            
+            const outer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            if (recordId !== null) {
+                outer.setAttribute('data-record-id', recordId);
+            }
+            const memoStr = (memo != null && String(memo).trim()) ? String(memo).trim().slice(0, 66).replace(/"/g, '&quot;').replace(/\n/g, ' ') : '';
+            if (memoStr) outer.setAttribute('data-memo', memoStr);
+            outer.setAttribute('filter', 'url(#plantShadow)');
+            if (scale !== 1) {
+                outer.setAttribute('transform', `translate(${x},${y}) scale(${scale}) translate(${-x},${-y})`);
+            }
+            const groundPatch = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+            groundPatch.setAttribute('cx', x);
+            groundPatch.setAttribute('cy', y + 5);
+            groundPatch.setAttribute('rx', 8);
+            groundPatch.setAttribute('ry', 3.5);
+            groundPatch.setAttribute('fill', 'rgba(215,212,208,0.22)');
+            outer.appendChild(groundPatch);
+
+            let container = outer;
+            if (useSway) {
+                const swayGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                swayGroup.classList.add('plant-sway');
+                swayGroup.style.transformOrigin = `${x}px ${y}px`;
+                const swayVariant = Math.floor(Math.random() * 3);
+                if (swayVariant === 1) swayGroup.classList.add('plant-sway-slow');
+                else if (swayVariant === 2) swayGroup.classList.add('plant-sway-slower');
+                outer.appendChild(swayGroup);
+                container = swayGroup;
+            }
+
+            const plantGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            if (!skipAnimation) {
+                plantGroup.classList.add('plant');
+            } else {
+                plantGroup.setAttribute('opacity', '0.9');
+            }
+            
+            const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            pathEl.setAttribute('d', path);
+            pathEl.setAttribute('fill', color);
+            pathEl.setAttribute('opacity', mood === 'sad' ? '0.78' : '0.85');
+            if (mood === 'sad') pathEl.setAttribute('filter', 'url(#sadSoft)');
+            
+            const gradientId = `gradient-${mood}-${Date.now()}-${Math.random()}`;
+            let defs = svg.querySelector('defs');
+            if (!defs) {
+                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                svg.appendChild(defs);
+            }
+            
+            const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            gradient.setAttribute('id', gradientId);
+            gradient.setAttribute('x1', '0%');
+            gradient.setAttribute('y1', '0%');
+            gradient.setAttribute('x2', '100%');
+            gradient.setAttribute('y2', '100%');
+            
+            const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            stop1.setAttribute('offset', '0%');
+            stop1.setAttribute('stop-color', color);
+            stop1.setAttribute('stop-opacity', '1');
+            
+            const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            stop2.setAttribute('offset', '100%');
+            const darkenAmount = mood === 'sad' ? 14 : 30;
+            const darkerColor = color.replace(/#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})/i, (_, r, g, b) => {
+                const darken = (hex) => Math.max(0, parseInt(hex, 16) - darkenAmount).toString(16).padStart(2, '0');
+                return `#${darken(r)}${darken(g)}${darken(b)}`;
+            });
+            stop2.setAttribute('stop-color', darkerColor);
+            stop2.setAttribute('stop-opacity', mood === 'sad' ? '0.85' : '0.9');
+            
+            gradient.appendChild(stop1);
+            gradient.appendChild(stop2);
+            defs.appendChild(gradient);
+            
+            pathEl.setAttribute('fill', `url(#${gradientId})`);
+            
+            plantGroup.appendChild(pathEl);
+            container.appendChild(plantGroup);
+            svg.appendChild(outer);
+        }
+
+        // ==================== 渲染逻辑 ====================
+        // 【今天】与【最近 7/30/60 天】共用同一套查看调节：图标大小、图标间隔、风吹摆动逻辑一致。
+        // 图标间隔：只改变图标与图标之间的水平/垂直距离为原来的 n 倍，不改变图标大小和流动速度。
+        // 实现：先算出一组“基准位置”，再绕整体中心按 spacingScale 缩放相对位置。
+        // 菱形格常量：与背景图案一致，用于将植物对齐到“土地格”中心，像从格子里长出来
+        const GRID_STEP = 50;
+        const GRID_PHASE = 25;
+
+        function renderGarden() {
+            const container = document.getElementById('gardenContainer');
+            container.innerHTML = '<svg class="garden-svg" id="gardenSvg" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMid meet"></svg>';
+            
+            const svg = document.getElementById('gardenSvg');
+            const viewBox = svg.getAttribute('viewBox').split(' ').map(Number);
+            const canvasWidth = viewBox[2];
+            const canvasHeight = viewBox[3];
+
+            // 土地感背景：斜放的菱形格，淡灰实线，不抢眼
+            let defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            svg.appendChild(defs);
+            const patternId = 'diamondGridPattern';
+            const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pattern.setAttribute('id', patternId);
+            pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+            pattern.setAttribute('width', GRID_STEP);
+            pattern.setAttribute('height', GRID_STEP);
+            const diamond = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            diamond.setAttribute('d', `M ${GRID_PHASE},0 L ${GRID_STEP},${GRID_PHASE} L ${GRID_PHASE},${GRID_STEP} L 0,${GRID_PHASE} Z`);
+            diamond.setAttribute('fill', 'none');
+            diamond.setAttribute('stroke', 'rgba(0,0,0,0.06)');
+            diamond.setAttribute('stroke-width', '0.8');
+            pattern.appendChild(diamond);
+            defs.appendChild(pattern);
+            const sadFilter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+            sadFilter.setAttribute('id', 'sadSoft');
+            sadFilter.setAttribute('x', '-15%');
+            sadFilter.setAttribute('y', '-15%');
+            sadFilter.setAttribute('width', '130%');
+            sadFilter.setAttribute('height', '130%');
+            const feBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+            feBlur.setAttribute('in', 'SourceGraphic');
+            feBlur.setAttribute('stdDeviation', '0.45');
+            sadFilter.appendChild(feBlur);
+            defs.appendChild(sadFilter);
+            const plantShadowFilter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+            plantShadowFilter.setAttribute('id', 'plantShadow');
+            plantShadowFilter.setAttribute('x', '-30%');
+            plantShadowFilter.setAttribute('y', '-10%');
+            plantShadowFilter.setAttribute('width', '160%');
+            plantShadowFilter.setAttribute('height', '130%');
+            const feDrop = document.createElementNS('http://www.w3.org/2000/svg', 'feDropShadow');
+            feDrop.setAttribute('dx', '0');
+            feDrop.setAttribute('dy', '4');
+            feDrop.setAttribute('stdDeviation', '3');
+            feDrop.setAttribute('flood-color', 'rgba(0,0,0,0.25)');
+            feDrop.setAttribute('flood-opacity', '1');
+            plantShadowFilter.appendChild(feDrop);
+            defs.appendChild(plantShadowFilter);
+            const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            bgRect.setAttribute('width', canvasWidth);
+            bgRect.setAttribute('height', canvasHeight);
+            bgRect.setAttribute('fill', `url(#${patternId})`);
+            bgRect.setAttribute('x', 0);
+            bgRect.setAttribute('y', 0);
+            svg.appendChild(bgRect);
+
+            const dateRange = getDateRange(currentView);
+            const records = getMoodRecordsInRange(dateRange);
+            const marginX = 50;
+            const marginY = 80;
+            const maxX = canvasWidth - marginX;
+            const maxY = canvasHeight - marginY;
+            
+            // 1. 为每条记录计算基准位置 (baseX, baseY)，不随 spacingScale 变化
+            const basePositions = [];
+            if (currentView === 'today') {
+                records.forEach(record => {
+                    basePositions.push({ x: record.x, y: record.y });
+                });
+            } else {
+                // 最近 n 天：与【今天】一致的查看调节逻辑；图标间隔定义图标与图标之间的关系；
+                // 同一天内所有心情图标在当日格子内相对均匀分布（网格），不集中、不疏离。
+                const totalDays = dateRange.length;
+                const colWidth = canvasWidth / totalDays;
+                const cellHeight = canvasHeight - 2 * marginY;
+                const recordsByDay = {};
+                records.forEach(r => {
+                    const k = r.dateIndex;
+                    if (!recordsByDay[k]) recordsByDay[k] = [];
+                    recordsByDay[k].push(r);
+                });
+                records.forEach(r => {
+                    const dayRecords = recordsByDay[r.dateIndex];
+                    const dayIndex = dayRecords.indexOf(r);
+                    const count = dayRecords.length;
+                    const left = r.dateIndex * colWidth;
+                    const top = marginY;
+                    // 当日格子内均匀网格：尽量接近正方形
+                    const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+                    const rows = Math.max(1, Math.ceil(count / cols));
+                    const cellW = colWidth / cols;
+                    const cellH = cellHeight / rows;
+                    const col = dayIndex % cols;
+                    const row = Math.floor(dayIndex / cols);
+                    const baseX = left + (col + 0.5) * cellW;
+                    const baseY = top + (row + 0.5) * cellH;
+                    basePositions.push({ x: baseX, y: baseY });
+                });
+            }
+            
+            // 2. 基准中心
+            let cx = 0, cy = 0;
+            if (basePositions.length > 0) {
+                basePositions.forEach(p => { cx += p.x; cy += p.y; });
+                cx /= basePositions.length;
+                cy /= basePositions.length;
+            } else {
+                cx = canvasWidth / 2;
+                cy = canvasHeight / 2;
+            }
+            
+            // 3. 最近 n 天：图标大小根据数量自适应，使整体约占视图 50%-90%（滑块为 1 时）
+            const viewArea = canvasWidth * canvasHeight;
+            const iconCount = records.length;
+            let periodScale = null;
+            if ((currentView === '7' || currentView === '30' || currentView === '60') && iconCount > 0) {
+                const targetFraction = 0.7;
+                const iconAreaAt1 = 40 * 40;
+                let raw = Math.sqrt(targetFraction * viewArea / (iconCount * iconAreaAt1));
+                raw = Math.max(1.5, Math.min(14, raw));
+                periodScale = raw;
+            }
+            // 4. 间隔 n 倍：新位置 = 中心 + (基准位置 - 中心) * spacingScale；再对齐到菱形格中心（像从土地格长出来）；最后限制在画布内
+            function snapToGrid(v, step, phase) {
+                return phase + step * Math.round((v - phase) / step);
+            }
+            records.forEach((record, idx) => {
+                const base = basePositions[idx] || { x: cx, y: cy };
+                let x = cx + (base.x - cx) * spacingScale;
+                let y = cy + (base.y - cy) * spacingScale;
+                x = snapToGrid(x, GRID_STEP, GRID_PHASE);
+                y = snapToGrid(y, GRID_STEP, GRID_PHASE);
+                x = Math.max(marginX, Math.min(maxX, x));
+                y = Math.max(marginY, Math.min(maxY, y));
+                
+                const isNewRecord = currentView === 'today' && record.isNew === true;
+                const recordId = record.timestamp != null ? record.timestamp : `r-${record.date}-${idx}`;
+                const memoText = (record.memo != null) ? String(record.memo) : '';
+                addPlantToSvg(svg, record.mood, x, y, !isNewRecord, recordId, currentView, sizeScale, memoText, periodScale);
+            });
+            
+            updateDebugInfo();
+            updateMoodSummary();
+        }
+
+        // ==================== 情绪记录 ====================
+        // 更新心情按钮的可用状态（只有"今天"视图可以记录）
+        function updateMoodButtonsState() {
+            const isTodayView = currentView === 'today';
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                btn.disabled = !isTodayView;
+            });
+        }
+
+        // 最近 n 天视图下在心情栏显示各心情占比（占比在心情文字下方）；今天视图只显示名称
+        const MOOD_LABELS = { happy: '开心', calm: '平静', sad: '难过', anxious: '焦虑', love: '爱' };
+        function updateMoodSummary() {
+            const periodViews = ['7', '30', '60'];
+            const isPeriodView = periodViews.includes(currentView);
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                const labelEl = btn.querySelector('.mood-btn-label');
+                const percentEl = btn.querySelector('.mood-btn-percent');
+                if (!labelEl || !percentEl) return;
+                const mood = btn.getAttribute('data-mood');
+                const baseLabel = MOOD_LABELS[mood] || mood;
+                labelEl.textContent = baseLabel;
+                if (!isPeriodView) {
+                    percentEl.textContent = '';
+                    return;
+                }
+                const dateRange = getDateRange(currentView);
+                const records = getMoodRecordsInRange(dateRange);
+                const total = records.length;
+                const count = total ? records.filter(r => r.mood === mood).length : 0;
+                const percent = total ? Math.round((count / total) * 100) : 0;
+                percentEl.textContent = total ? percent + '%' : '';
+            });
+        }
+
+        // 删除植物动画（飞出效果）
+        function removePlantWithAnimation(plantElement) {
+            if (!plantElement) return;
+            
+            // 飞出动画（SVG 元素使用 transform 和 opacity）
+            plantElement.style.transition = 'all 600ms ease-out';
+            plantElement.style.transform = 'translateY(-100px) scale(0.3)';
+            plantElement.setAttribute('opacity', '0');
+            
+            // 动画结束后移除元素
+            setTimeout(() => {
+                if (plantElement.parentNode) {
+                    plantElement.parentNode.removeChild(plantElement);
+                }
+            }, 600);
+        }
+
+        // 1分钟内点击相同心情时撤销最近一次该心情记录；返回 true 表示已撤销（此时不应弹出备忘录）
+        function tryUndoLastMood(mood) {
+            if (currentView !== 'today') return false;
+            const dateStr = getDateString();
+            initDateData(dateStr);
+            const records = moodData[dateStr];
+            const now = Date.now();
+            const oneMinute = 60 * 1000;
+            let foundIndex = -1;
+            for (let i = records.length - 1; i >= 0; i--) {
+                const record = records[i];
+                if (record.mood === mood && record.timestamp && (now - record.timestamp) <= oneMinute) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+            if (foundIndex === -1) return false;
+            const recordToRemove = records[foundIndex];
+            const recordId = recordToRemove.timestamp || `record-${foundIndex}`;
+            const svg = document.getElementById('gardenSvg');
+            const plantElement = svg ? svg.querySelector(`[data-record-id="${recordId}"]`) : null;
+            if (plantElement) {
+                removePlantWithAnimation(plantElement);
+                setTimeout(() => {
+                    records.splice(foundIndex, 1);
+                    saveDataToStorage();
+                    renderGarden();
+                }, 600);
+            } else {
+                records.splice(foundIndex, 1);
+                saveDataToStorage();
+                renderGarden();
+            }
+            return true;
+        }
+
+        // 记录情绪（自动保存到 localStorage）
+        // 注意：只有"今天"视图下才能记录；memo 为可选心情日记（最多66字）；撤销由点击时 tryUndoLastMood 处理，此处仅做新增
+        function recordMood(mood, memo) {
+            if (currentView !== 'today') return;
+            const dateStr = getDateString();
+            initDateData(dateStr);
+            const now = Date.now();
+            // 添加新记录：计算新植物的位置（仅在"今天"视图下执行）
+            const svg = document.getElementById('gardenSvg');
+            const viewBox = svg.getAttribute('viewBox').split(' ').map(Number);
+            const canvasWidth = viewBox[2];
+            const canvasHeight = viewBox[3];
+            let x = 200 + Math.random() * (canvasWidth - 400);
+            let y = 150 + Math.random() * (canvasHeight - 300);
+            x = Math.max(50, Math.min(canvasWidth - 50, x));
+            y = Math.max(50, Math.min(canvasHeight - 50, y));
+            const memoText = (typeof memo !== 'undefined' && memo !== null) ? String(memo).slice(0, 66) : '';
+            const newRecord = { mood, x, y, timestamp: now, isNew: true, memo: memoText };
+            moodData[dateStr].push(newRecord);
+            
+            // 立即保存到 localStorage
+            saveDataToStorage();
+            
+            // 重新渲染（显示新植物）
+            renderGarden();
+            
+            // 渲染后清除新记录标记（避免下次加载时重复播放动画）
+            setTimeout(() => {
+                const record = moodData[dateStr][moodData[dateStr].length - 1];
+                if (record && record.isNew) {
+                    delete record.isNew;
+                    saveDataToStorage();
+                }
+            }, 1000);
+        }
+
+        // ==================== 调试信息 ====================
+        // 更新调试信息
+        function updateDebugInfo() {
+            const debugInfo = document.getElementById('debugInfo');
+            const dateRange = getDateRange(currentView);
+            const records = getMoodRecordsInRange(dateRange);
+            const totalCount = records.length;
+            
+            let viewText = '';
+            switch(currentView) {
+                case 'today':
+                    viewText = '今天';
+                    break;
+                case '7':
+                    viewText = '最近7天';
+                    break;
+                case '30':
+                    viewText = '最近30天';
+                    break;
+                case '60':
+                    viewText = '最近60天';
+                    break;
+            }
+            
+            const todayStr = getDateString();
+            debugInfo.textContent = `${viewText} | ${todayStr} | 共${totalCount}条记录`;
+        }
+
+        // 查看模式：应用风吹摆动速度倍数到 CSS 变量（速度 N 倍 = 时长 1/N）
+        function applySwayScale() {
+            const base = 4;
+            const baseSlow = 5;
+            const baseSlower = 6;
+            document.documentElement.style.setProperty('--sway-duration', (base / swayScale) + 's');
+            document.documentElement.style.setProperty('--sway-duration-slow', (baseSlow / swayScale) + 's');
+            document.documentElement.style.setProperty('--sway-duration-slower', (baseSlower / swayScale) + 's');
+        }
+
+        // ==================== 深呼吸调节 ====================
+        let breathTimerId = null;
+        let breathRemain = 0;
+
+        function startBreathCountdown(seconds) {
+            if (breathTimerId) return;
+            const clockEl = document.getElementById('breathClock');
+            const btn30 = document.getElementById('breath30');
+            const btn60 = document.getElementById('breath60');
+            if (!clockEl || (!btn30 && !btn60)) return;
+            breathRemain = seconds;
+            clockEl.textContent = String(breathRemain);
+            clockEl.classList.remove('idle');
+            if (btn30) btn30.disabled = true;
+            if (btn60) btn60.disabled = true;
+            breathTimerId = setInterval(() => {
+                breathRemain--;
+                clockEl.textContent = breathRemain > 0 ? String(breathRemain) : '0';
+                if (breathRemain <= 0) {
+                    clearInterval(breathTimerId);
+                    breathTimerId = null;
+                    clockEl.classList.add('shake');
+                    setTimeout(() => {
+                        clockEl.classList.remove('shake');
+                        clockEl.classList.add('idle');
+                        clockEl.textContent = '—';
+                        if (btn30) btn30.disabled = false;
+                        if (btn60) btn60.disabled = false;
+                    }, 500);
+                }
+            }, 1000);
+        }
+
+        // ==================== 初始化 ====================
+        function init() {
+            // 1. 从 localStorage 加载历史数据
+            loadDataFromStorage();
+            
+            // 2. 视图切换按钮事件
+            document.querySelectorAll('.view-toggle button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const view = btn.getAttribute('data-view');
+                    currentView = view;
+                    
+                    document.querySelectorAll('.view-toggle button').forEach(b => {
+                        b.classList.remove('active');
+                    });
+                    btn.classList.add('active');
+                    
+                    updateMoodButtonsState();
+                    renderGarden();
+                });
+            });
+            
+            // 3. 心情备忘录弹窗：选择心情→弹窗→可输入0–66字→提交后心情才展示
+            const memoOverlay = document.getElementById('memoOverlay');
+            const memoInput = document.getElementById('memoInput');
+            const memoCount = document.getElementById('memoCount');
+            const memoMoodTag = document.getElementById('memoMoodTag');
+            const memoCancel = document.getElementById('memoCancel');
+            const memoSubmit = document.getElementById('memoSubmit');
+            const moodLabels = { happy: '开心', calm: '平静', sad: '难过', anxious: '焦虑', love: '爱' };
+            const moodTagClasses = { happy: 'mood-btn happy', calm: 'mood-btn calm', sad: 'mood-btn sad', anxious: 'mood-btn anxious', love: 'mood-btn love' };
+            let pendingMood = null;
+
+            function openMemoModal(mood) {
+                pendingMood = mood;
+                memoMoodTag.textContent = moodLabels[mood] || mood;
+                memoMoodTag.className = 'memo-mood-tag ' + (moodTagClasses[mood] || '');
+                memoInput.value = '';
+                memoInput.placeholder = '选填：写下此刻想说的话（最多66字）';
+                memoCount.textContent = '0/66';
+                memoCount.classList.remove('at-limit');
+                if (memoOverlay) memoOverlay.classList.add('show');
+                memoInput.focus();
+            }
+            function closeMemoModal() {
+                pendingMood = null;
+                if (memoOverlay) memoOverlay.classList.remove('show');
+            }
+            function updateMemoCount() {
+                const len = (memoInput && memoInput.value) ? memoInput.value.length : 0;
+                if (memoCount) {
+                    memoCount.textContent = len + '/66';
+                    memoCount.classList.toggle('at-limit', len >= 66);
+                }
+            }
+            if (memoInput) {
+                memoInput.addEventListener('input', updateMemoCount);
+                memoInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMemoModal(); });
+            }
+            if (memoCancel) memoCancel.addEventListener('click', closeMemoModal);
+            if (memoSubmit) memoSubmit.addEventListener('click', () => {
+                if (pendingMood == null) return;
+                const text = memoInput ? memoInput.value.trim() : '';
+                recordMood(pendingMood, text);
+                closeMemoModal();
+            });
+            if (memoOverlay) memoOverlay.addEventListener('click', (e) => { if (e.target === memoOverlay) closeMemoModal(); });
+
+            // 情绪按钮：1分钟内同心情则直接撤销不弹窗；否则弹出备忘录，提交后才在土地上展示
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (currentView !== 'today') return;
+                    const mood = btn.getAttribute('data-mood');
+                    if (tryUndoLastMood(mood)) return;
+                    openMemoModal(mood);
+                });
+            });
+            
+            // 4. 查看模式滑块：图标大小、图标间隔、风吹摆动
+            const sizeBar = document.getElementById('sizeBar');
+            const spacingBar = document.getElementById('spacingBar');
+            const swayBar = document.getElementById('swayBar');
+            if (sizeBar) {
+                sizeScale = parseFloat(sizeBar.value);
+                sizeBar.addEventListener('input', () => {
+                    sizeScale = parseFloat(sizeBar.value);
+                    renderGarden();
+                });
+            }
+            if (spacingBar) {
+                spacingScale = parseFloat(spacingBar.value);
+                spacingBar.addEventListener('input', () => {
+                    spacingScale = parseFloat(spacingBar.value);
+                    renderGarden();
+                });
+            }
+            if (swayBar) {
+                swayScale = parseFloat(swayBar.value);
+                applySwayScale();
+                swayBar.addEventListener('input', () => {
+                    swayScale = parseFloat(swayBar.value);
+                    applySwayScale();
+                });
+            }
+            
+            // 4.5 深呼吸调节：30秒 / 60秒 倒计时，结束时震动
+            document.querySelectorAll('.breath-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const sec = parseInt(btn.getAttribute('data-sec'), 10);
+                    if (sec) startBreathCountdown(sec);
+                });
+            });
+
+            // 4.6 左侧调节面板：点击收起/展开
+            const viewSlidersEl = document.getElementById('viewSliders');
+            const viewSlidersToggleBtn = document.getElementById('viewSlidersToggle');
+            if (viewSlidersEl && viewSlidersToggleBtn) {
+                viewSlidersToggleBtn.addEventListener('click', () => {
+                    viewSlidersEl.classList.toggle('collapsed');
+                    viewSlidersToggleBtn.textContent = viewSlidersEl.classList.contains('collapsed') ? '»' : '«';
+                    viewSlidersToggleBtn.title = viewSlidersEl.classList.contains('collapsed') ? '展开' : '收起';
+                });
+            }
+
+            // 4.7 心情日记浮动提示：仅今天/最近n天视图下，鼠标悬停心情时显示 memo
+            const gardenContainer = document.getElementById('gardenContainer');
+            const memoTooltipEl = document.getElementById('memoTooltip');
+            if (gardenContainer && memoTooltipEl) {
+                const showMemoViews = ['today', '7', '30', '60'];
+                gardenContainer.addEventListener('mouseover', (e) => {
+                    if (!showMemoViews.includes(currentView)) return;
+                    let node = e.target;
+                    while (node && node !== gardenContainer) {
+                        if (node.getAttribute && node.getAttribute('data-memo')) {
+                            const raw = node.getAttribute('data-memo');
+                            if (!raw) return;
+                            const text = raw.replace(/&quot;/g, '"');
+                            memoTooltipEl.textContent = text;
+                            memoTooltipEl.classList.add('show');
+                            const x = e.clientX;
+                            const y = e.clientY + 14;
+                            memoTooltipEl.style.left = Math.min(x + 12, window.innerWidth - 296) + 'px';
+                            memoTooltipEl.style.top = y + 'px';
+                            return;
+                        }
+                        node = node.parentNode;
+                    }
+                });
+                gardenContainer.addEventListener('mouseout', (e) => {
+                    let node = e.relatedTarget;
+                    while (node && node !== gardenContainer) {
+                        if (node.getAttribute && node.getAttribute('data-memo')) return;
+                        node = node.parentNode;
+                    }
+                    memoTooltipEl.classList.remove('show');
+                });
+            }
+            
+            // 5. 更新心情按钮的可用状态
+            updateMoodButtonsState();
+            
+            // 6. 初始渲染
+            renderGarden();
+        }
+
+        // 启动应用
+        init();
+    </script>
+</body>
+</html>
